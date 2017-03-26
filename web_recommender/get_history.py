@@ -8,9 +8,6 @@
 import argparse
 import logging
 import os
-import socket
-# import cassandra
-# from cassandra.cluster import Cluster
 import webbrowser
 import sys
 import re
@@ -74,46 +71,16 @@ def copy_chrome_history(path_to_file, current_dir):
 		raise SystemExit(1)
 
 
-# # TODO: Split up this function so that one gets the urls and the other inputs them to a db
-# def send_to_db(current_dir, keyspace):
-# 	"""Send URLs obtained from Chrome History to cassandra database.
-# 	TODO:
-# 	- Ensure that documents are linked to username which can be retrived from both
-# 	Chrome and Python - linked by hostname
-# 	- Install Cassandra driver using pip - done
-# 	"""
-# 	username = socket.gethostname()
-# 	filename = current_dir+'/'+TEXT_FILE
-# 	# TODO: Tidy up to work with history.txt
-# 	try:
-# 		cluster = Cluster()
-# 		session = cluster.connect(keyspace)
-# 		logging.info('Connected to Cassandra on localhost')
-# 		# Get links from file
-# 		# read file
-# 		links = []
-# 		with open(filename) as f:
-# 			logging.info('file opened')
-# 			for line in f:
-# 				url = line.strip()
-# 				links.append(url)
-# 		counter = 0
-# 		if links is None:
-# 			logging.warning('WARNING: No links found')
-# 		else:
-# 			logging.info('Links are ready to be inserted into the database')
-# 		for url in links:
-# 			session.execute(
-# 				"""
-# 				INSERT INTO userhistory (userid, userhostname, url)
-# 				VALUES (%s, %s, %s)
-# 				""",
-# 				(counter, username, url)
-# 			)
-# 			counter += 1
-# 		logging.info("Finished table insertion.")
-# 	except cassandra.DriverException:
-# 		logging.warning('WARNING: Cassandra exception: ')
+def send_to_db(current_dir):
+ 	"""Send URLs and text obtained from Chrome History to sqlite3 database.
+
+	TODO:
+ 	- Ensure data is not duplicated
+	- Entries need a clear row definition
+	"""
+
+ 	filename = current_dir+'/'+TEXT_FILE
+ 	# TODO: Tidy up to work with history.txt
 
 
 def open_chrome(chrome_path, url=None):
@@ -128,8 +95,9 @@ def open_chrome(chrome_path, url=None):
 
 
 def clean_up():
-	"""Clean up current directory when script ends"""
-	# TODO
+	"""Clean up current directory
+	"""
+	# TODO: remove History file, history.txt and other files which aren't needed after data is collected
 
 
 def main():
@@ -147,11 +115,6 @@ def main():
 		default='open -a /Applications/Google\ Chrome.app %s',
 		help='set chrome path for the specific OS. Default=%(default)s'
 	)
-	# parser.add_argument(
-	# 	'--keyspace',
-	# 	default='recommendersystem',
-	# 	help='Apache Cassandra keyspace to use. Default=%(default)s'
-	# )
 	parser.add_argument(
 		'--current-dir',
 		default=cwd,
@@ -165,7 +128,6 @@ def main():
 	args = parser.parse_args()
 	# TODO: add some parameter to switch between different functionality of the script
 	copy_chrome_history(args.file_path, args.current_dir)
-	#send_to_db(args.current_dir, args.keyspace)
 	#open_chrome(args.chrome_path, args.chrome_url)
 
 
