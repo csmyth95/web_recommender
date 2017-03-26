@@ -13,7 +13,6 @@ import logging
 import os
 import urllib
 import bs4
-import textmining
 import ssl
 #import textract
 
@@ -95,50 +94,6 @@ def parse_html(urls, url_limit):
 			pass
 
 	return urls_with_text
-
-
-# def create_document_term_matrix(url_dict):
-# 	"""Create document term matrix with url as document and then the contained words
-# 	NOTES:
-# 	- Should I strip out insignificant words e.g and, to, if, etc...
-# 	"""
-#     # Initialize class to create term-document matrix
-# 	tdm = textmining.TermDocumentMatrix()
-#     # Add the documents
-# 	for key in url_dict:
-# 		tdm.add_doc(url_dict[key])
-#     # Write out the matrix to a csv file. Note that setting cutoff=1 means
-#     # that words which appear in 1 or more documents will be included in
-#     # the output (i.e. every word will appear in the output). The default
-#     # for cutoff is 2, since we usually aren't interested in words which
-#     # appear in a single document. For this example we want to see all
-#     # words however, hence cutoff=1.
-# 	tdm.write_csv('matrix.csv', cutoff=1)
-#     # Instead of writing out the matrix you can also access its rows directly.
-#     # Let's print them to the screen.
-# 	for row in tdm.rows(cutoff=1):
-# 		logging.info(row)
-#
-# 	# TODO: Implement get most common words
-# 	"""
-# 	# Print ten most common words in the dictionary
-#     freq_word = [(counts[0][0], word) for (word, counts) in \
-#       textmining.dictionary.items()]
-#     freq_word.sort(reverse=True)
-#     print '\ndictionary_example 1\n'
-#     for freq, word in freq_word[:10]:
-#         print word, freq
-#
-#     # The same word can be used in many different contexts in the English
-#     # language. The dictionary in the textmining module contains the
-#     # relative frequencies of each of these parts of speech for a given
-#     # word. An explanation of the part-of-speech codes is in
-#     # doc/poscodes.html. Here are the part-of-speech frequencies for the
-#     # word 'open'.
-#     print '\ndictionary_example 2\n'
-#     print textmining.dictionary['open']
-#
-# 	"""
 
 
 def main():
