@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Directories not to be included
+unused/
+
+# Files not to be included
+History
+history.txt
+*.csv
+*.json
