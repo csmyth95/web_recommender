@@ -22,15 +22,6 @@ FILE_PATH='~/Library/Application Support/Google/Chrome/Default'
 TEXT_FILE='history.txt'
 
 
-def isprocessrunning(process):
-	running = False
-	processlist = subprocess.Popen(["ps", "ax"],stdout=subprocess.PIPE)
-	for a in processlist.stdout:
-		if re.search(process, a):
-			running = True
-	return running
-
-
 def copy_chrome_history(path_to_file, current_dir):
 	"""Copy urls from local History sqlite3 db to local text file
 
@@ -42,11 +33,6 @@ def copy_chrome_history(path_to_file, current_dir):
 	"""
 	history_file = current_dir+'/'+TEXT_FILE
 	original_file_path = os.path.expanduser(path_to_file)
-
-	# Check if Chrome is running, kill the processes if it is
-	if isprocessrunning("chrome".encode('utf-8')):
-		Popen('taskkill /F /IM chrome.exe', shell=True)
-		logging.info('All instances of chrome were killed.')
 
 	if os.path.exists(original_file_path):
 		try:
