@@ -32,11 +32,11 @@ def isprocessrunning(process):
 
 
 def copy_chrome_history(path_to_file, current_dir):
-	"""Copy urls from local History db to Cassandra database
+	"""Copy urls from local History sqlite3 db to local text file
 
 	The local History file of Google Chrome is an sqlite database. This function
-	reads the contents of the urls table into the nosql database Cassandra with
-	a unique ID and the hostname of the device.
+	reads the contents of the urls table into a file called history.txt in the current
+	directory.
 
 	WARNING: For sqlite command to work, all instances of Chrome must be shutdown.
 	"""
@@ -57,7 +57,7 @@ def copy_chrome_history(path_to_file, current_dir):
 			connection = sqlite3.connect('History')
 			logging.info('Database connected to successfully')
 			# TODO: Limit number of urls sent to database e.g last - 100
-			cursor = connection.execute("SELECT url from urls")
+			cursor = connection.execute("SELECT url FROM urls ORDER BY last_visit_time")
 			with open(history_file, 'w') as f:
 				for row in cursor:
 					f.write(row[0]+'\n')
