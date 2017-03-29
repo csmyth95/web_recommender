@@ -2,7 +2,7 @@
 
 # Todo:
 # 1. Copy history file to current directory
-# 2. Send history to a database
+# 2. Send history to a local text file
 # 3. Open Chrome...
 
 import argparse
@@ -25,11 +25,11 @@ TEXT_FILE='history.txt'
 def copy_chrome_history(path_to_file, current_dir):
 	"""Copy urls from local History sqlite3 db to local text file
 
-	The local History file of Google Chrome is an sqlite database. This function
+	The local History file of Google Chrome is an SQLite database. This function
 	reads the contents of the urls table into a file called history.txt in the current
 	directory.
 
-	WARNING: For sqlite command to work, all instances of Chrome must be shutdown.
+	NOTE: For sqlite command to work, all instances of Chrome must be shutdown.
 	"""
 	history_file = current_dir+'/'+TEXT_FILE
 	original_file_path = os.path.expanduser(path_to_file)
@@ -42,8 +42,7 @@ def copy_chrome_history(path_to_file, current_dir):
 			logging.info('History sqlite file copied to: '+original_file_path)
 			connection = sqlite3.connect('History')
 			logging.info('Database connected to successfully')
-			# TODO: Limit number of urls sent to database e.g last - 100
-			cursor = connection.execute("SELECT url FROM urls ORDER BY last_visit_time")
+			cursor = connection.execute("SELECT url FROM urls ORDER BY last_visit_time DESC")
 			with open(history_file, 'w') as f:
 				for row in cursor:
 					f.write(row[0]+'\n')
@@ -53,20 +52,46 @@ def copy_chrome_history(path_to_file, current_dir):
 		except sqlite3.Error as e:
 			logging.error('Sqlite3 error: '+str(e))
 	else:
-		logging.error('Directory for the History file does not exist.')
+		logging.error('ERROR: Directory for the History file does not exist.')
 		raise SystemExit(1)
 
 
-def send_to_db(current_dir):
- 	"""Send URLs and text obtained from Chrome History to sqlite3 database.
-
-	TODO:
- 	- Ensure data is not duplicated
-	- Entries need a clear row definition
-	"""
-
- 	filename = current_dir+'/'+TEXT_FILE
- 	# TODO: Tidy up to work with history.txt
+# def send_to_db(current_dir, doc_clusters, doc_cluster_terms):
+#  	"""Send URLs and text obtained from Chrome History to sqlite3 database.
+#
+# 	TODO:
+#  	- Ensure data is not duplicated
+# 	- Entries need a clear row definition
+# 	"""
+#
+#  	filename = current_dir+'/'+TEXT_FILE
+#  	# TODO: Tidy up to work with history.txt
+# 	try:
+# 		connection = sqlite3.connect('History')
+# 		logging.info('Database connected to successfully')
+# 		# TODO: Limit number of urls sent to database e.g last - 100
+# 		# if table doesn't exist:
+# 		# 	# Create table
+# 		# 	logging.info("INFO: Creating cluster table")
+# 		# 	connection.execute('''CREATE TABLE COMPANY
+# 		# 		(ID INT PRIMARY KEY     NOT NULL,
+# 		# 		NAME           TEXT    NOT NULL,
+# 		# 		SIZE            INT     NOT NULL,
+# 		# 		ADDRESS        CHAR(50),
+# 		# 		SALARY         REAL);'''
+# 		# 	)
+#
+# 		for cluster in doc_clusters:
+# 			connection.execute("INSERT INTO ")
+# 		# #connection.execute("SELECT url FROM urls ORDER BY last_visit_time ASC")
+# 		# with open(history_file, 'w') as f:
+# 		# 	for row in cursor:
+# 		# 		f.write(row[0]+'\n')
+# 		# logging.info('History database has been copied to: '+history_file)
+# 		connection.close()
+# 		logging.info('sqlite3 connection closed.')
+# 	except sqlite3.Error as e:
+# 		logging.error('Sqlite3 error: '+str(e))
 
 
 def open_chrome(chrome_path, url=None):
