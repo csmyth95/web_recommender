@@ -5,10 +5,21 @@ import simplejson
 import random
 import sys
 from time import time
+import os
+import argparse
+import logging
+
+# local imports
 import parse_html
+import get_history
+import cluster_documents
 
 # Global variables
-FILE_PATH='~/Library/Application Support/Google/Chrome/Default'
+FILE_PATH = '~/Library/Application Support/Google/Chrome/Default'
+doc_clusters = None
+doc_cluster_terms = None
+# NOTE: Need to use same vectorizer for both fitting and predicting data with Kmeans
+vectorizer = None
 
 
 class HandleHTTP(BaseHTTPRequestHandler):
@@ -18,45 +29,37 @@ class HandleHTTP(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        """Handle GET request to return the recommended links from recommended_links.json"""
         self._set_headers()
-        """TODO: Figure out if I need this GET function"""
-        f = open("index.html", "r")
+        logging.info("INFO: GET received, sending recommended_links.json")
+        f = open("recommended_links.json", "r")
         self.wfile.write(f.read())
 
     def do_HEAD(self):
         self._set_headers()
 
     def do_POST(self):
-        """TODO: Handle JSON data, not stream data"""
+        """Handle POST request to use client JSON data to recommend links"""
         self._set_headers()
-        print "in post method"
+        logging.info("INFO: POST request received...")
         self.data_string = self.rfile.read(int(self.headers['Content-Length']))
-        # TODO: parse JSON, create matrix and ML algorithm => send recommendedlinks back
-        # Send links back in the response
-        # TODO: Find someway to do all the Chrome History before trying to recommend links
-        # For now, do everything here
         # NOTE: data is of type list
         data = simplejson.loads(self.data_string)
-        with open("user_links.json", "w") as outfile:
-            simplejson.dump(data, outfile)
-        print "{}".format(data)
-        data_documents = parse_html.parse_html(data)
-        print data_documents
-        # What to do with the data_documents???
-
-        # TODO: Return links as JSON object (list of urls)
+        data_documents = parse_html.parse_html(data, args.url_limit)
+        recommended_links = cluster_documents.compare_items_to_cluster(doc_clusters, data_documents, args, vectorizer)
+        json_response = simplejson.dumps(recommended_links)
+        with open("recommended_links.json", "w") as outfile:
+            simplejson.dump(json_response, outfile)
+        logging.info("INFO: Links to recommend: %s" % json_response)
         self.send_response(200)
         self.end_headers()
         return
 
 
-# def getRecommendedLinks(links):
-#     """Utilises clusters to recommend links from a list of links"""
-
-
 def run(server_class=HTTPServer, handler_class=HandleHTTP, port=9000):
     server_address = ('localhost', port)
     httpd = server_class(server_address, handler_class)
+    print()
     print 'Starting httpd...'
     try:
         httpd.serve_forever()
@@ -101,14 +104,15 @@ if __name__ == "__main__":
     		help='Set limit for the amount of URLs to parse. Default=%(default)s'
     	)
         parser.add_argument(
-            'true-k',
+            '--true-k',
             default=10,
             help='Number of clusers to create from the user\'s history'
         )
         parser.add_argument(
-                "--lsa",
-                dest="n_components", type="int",
-                help="Preprocess documents with latent semantic analysis."
+            "--lsa",
+            dest="n_components",
+            type=int,
+            help="Preprocess documents with latent semantic analysis."
         )
         parser.add_argument(
             "--no-minibatch",
@@ -141,11 +145,11 @@ if __name__ == "__main__":
             help="logging.info progress reports inside k-means algorithm."
         )
     	args = parser.parse_args()
-    	# TODO: add some parameter to switch between different functionality of the script
-    	get_history.copy_chrome_history(args.file_path, args.current_dir)
+        # TODO: <AFTER_THOUGHT> add some parameter to switch between different functionality of the script
+        get_history.copy_chrome_history(args.file_path, args.current_dir)
         urls = parse_html.get_urls(args.current_dir)
-        text_docs = parse_html.parse_html(urls, arguments.url_limit)
-        doc_clusters, doc_cluster_terms = cluster_docs(text_docs, opts, args.true_k)
+        text_docs = parse_html.parse_html(urls, args.url_limit)
+        doc_clusters, doc_cluster_terms, vectorizer = cluster_documents.cluster_docs(text_docs, args)
         logging.info("INFO: History collected, parsed and ready for recommendations.")
         get_history.open_chrome(args.chrome_path, args.chrome_url)
         run()
