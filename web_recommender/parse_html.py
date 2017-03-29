@@ -11,10 +11,11 @@ TODO:
 import argparse
 import logging
 import os
-import urllib
+import urllib2
 import bs4
 import ssl
-#import textract
+from time import time
+# import textract
 
 logging.basicConfig(level=logging.INFO)
 
@@ -27,6 +28,9 @@ def get_urls(current_dir):
 	with open(filename, 'r') as f:
 		for line in f:
 			line = line.strip()
+			if line.endswith('pdf'):
+				# TODO: Implement way to parse PDFs correctly
+				continue
 			if line.startswith('http'):
 				urls.append(line)
 				counter += 1
@@ -45,29 +49,25 @@ def parse_html(urls, url_limit):
 	     TODO:
 		 - Check if url is reachable e.g urls from HPE
 		 - Filter out URLs that look for authentication e.g blackboard
-		 - - What about Facebook?
-		 - Set limit for how many urls to parse (use argparse)
-	     - Time how long it runs
+		 - - What about sites like Facebook?
 		 - Implement way to parse PDF files
 	     - Create try except for timeouts
 	"""
 	urls_with_text = dict()
 	logging.info('Parsing HTML files into text.\n')
+	t0 = time()
 	counter = 0
 	for url in urls:
 		logging.info(url)
 		try:
-			html = urllib.urlopen(url).read()
-			"""
-			#text = ''
-			# TODO: Implement way to parse PDF files
-			#if url.endswith('pdf'):
-				# TODO
-				#parsed_html = StringIO(html)
-			#	logging.info(type(html))
-			#	text = textract.process(html)
-				#text = slate.PDF(html)
-			#else:"""
+			response = urllib2.urlopen(url, timeout=15)
+			# Check if url is requesting authentication
+			auth = response.info().getheader('WWW-Authenticate')
+			if auth and auth.lower().startswith('basic'):
+				logging.warning("WARNING: Requesting {} requires basic authentication".format(url))
+				continue
+
+			html = response.read()
 			soup = bs4.BeautifulSoup(html, 'lxml')
 
 			# Rip out all script and style elements
@@ -93,6 +93,7 @@ def parse_html(urls, url_limit):
 			logging.warning("WARNING: "+str(e))
 			pass
 
+	logging.info("INFO: Parsing took %0.3fs" % (time() - t0))
 	return urls_with_text
 
 
