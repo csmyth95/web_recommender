@@ -21,7 +21,6 @@ import parse_html
 # import textract
 
 # Clustering imports
-#from sklearn.datasets import fetch_20newsgroups
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_extraction.text import HashingVectorizer
@@ -42,47 +41,47 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s %(levelname)s %(message)s')
 
 
-def cluster_docs(text_docs, opts):
+def cluster_docs(text_docs, args, labels=None):
     """Cluster HTML documents using a clustering ML algorithm from sci-kit learn"""
-    labels = text_docs.keys()
-    true_k = numpy.unique(labels).shape[0] # Get total number of urls
-    logging.info("Extracting features from the dataset using a sparse vectorizer")
+
+    logging.info("INFO: Extracting features from the dataset using a sparse vectorizer")
     t0 = time()
-    if opts.use_hashing:
-        if opts.use_idf:
-            # Perform an IDF normalization on the output of HashingVectorizer
-            hasher = HashingVectorizer(
-                n_features=opts.n_features, stop_words='english', non_negative=True,
-                norm=None, binary=False
-            )
-            vectorizer = make_pipeline(hasher, TfidfTransformer())
-        else:
-            vectorizer = HashingVectorizer(
-                n_features=opts.n_features, stop_words='english',
-                non_negative=False, norm='l2', binary=False
-            )
-    else:
-        vectorizer = TfidfVectorizer(
-            max_df=0.5, max_features=opts.n_features, min_df=2,
-            stop_words='english', use_idf=opts.use_idf
-        )
-    X = vectorizer.fit_transform(text_docs.values())
+    # if args.use_hashing:
+    #     if args.use_idf:
+    #         # Perform an IDF normalization on the output of HashingVectorizer
+    #         hasher = HashingVectorizer(
+    #             n_features=args.n_features, stop_words='english', non_negative=True,
+    #             norm=None, binary=False
+    #         )
+    #         vectorizer = make_pipeline(hasher, TfidfTransformer())
+    #     else:
+    #         vectorizer = HashingVectorizer(
+    #             n_features=args.n_features, stop_words='english',
+    #             non_negative=False, norm='l2', binary=False
+    #         )
+    # else:
+    vectorizer = TfidfVectorizer(
+        max_features=args.n_features, stop_words='english', use_idf=args.use_idf
+    )
+    train_vectorizer = vectorizer.fit(text_docs.values())
+    vectorized = train_vectorizer.transform(text_docs.values())
 
     logging.info("done in %fs" % (time() - t0))
-    logging.info("n_samples: %d, n_features: %d" % X.shape)
+    logging.info("n_samples: %d, n_features: %d" % vectorized.shape)
     logging.info("------------------")
 
-    if opts.n_components:
+    if args.n_components:
+        # TODO: Create function for this so can swap between LDA and LSA
         logging.info("Performing dimensionality reduction using LSA")
         t0 = time()
         # Vectorizer results are normalized, which makes KMeans behave as
         # spherical k-means for better results. Since LSA/SVD results are
         # not normalized, we have to redo the normalization.
-        svd = TruncatedSVD(opts.n_components)
+        svd = TruncatedSVD(args.n_components)
         normalizer = Normalizer(copy=False)
         lsa = make_pipeline(svd, normalizer)
 
-        X = lsa.fit_transform(X)
+        vectorized = lsa.fit_transform(vectorized)
 
         logging.info("done in %fs" % (time() - t0))
 
@@ -92,93 +91,110 @@ def cluster_docs(text_docs, opts):
 
         logging.info("---------------------")
 
-    if opts.minibatch:
-        km = MiniBatchKMeans(n_clusters=true_k, init='k-means++', n_init=1,
-                             init_size=1000, batch_size=1000, verbose=opts.verbose)
+    # NOTE: kmeans++: Selects initial clusters in a way that speeds up convergence
+    if args.minibatch:
+        km = MiniBatchKMeans(n_clusters=args.true_k, init='k-means++', n_init=1,
+                             init_size=1000, batch_size=1000, verbose=args.verbose)
     else:
         km = KMeans(n_clusters=true_k, init='k-means++', max_iter=100, n_init=1,
-                    verbose=opts.verbose)
+                    verbose=args.verbose)
 
     logging.info("Clustering sparse data with %s" % km)
     t0 = time()
     # Compute KMeans Clustering
-    document_clusters = km.fit(X)
+    document_clusters = km.fit(vectorized)
+
     logging.info("done in %0.3fs" % (time() - t0))
     logging.info("---------------")
 
     # Explanation: have labels and want to see if the clustering algorithm happened to cluster the data according to your labels
-    logging.info("Homogeneity: %0.3f" % metrics.homogeneity_score(labels, document_clusters.labels_))
-    logging.info("Completeness: %0.3f" % metrics.completeness_score(labels, document_clusters.labels_))
-    logging.info("V-measure: %0.3f" % metrics.v_measure_score(labels, document_clusters.labels_))
-    logging.info("Adjusted Rand-Index: %.3f"
-                 % metrics.adjusted_rand_score(labels, document_clusters.labels_))
-    # NOTE: Silhouette score: closer to 1 the better, mean of silhouette Coefficient for all observations, large dataset == long time
-    logging.info("Silhouette Coefficient: %0.3f"
-                 % metrics.silhouette_score(X, document_clusters.labels_, sample_size=1000))
+    # NOTE: These can't be used as my documents aren't already labelled
+    if labels is not None:
+        logging.info("Homogeneity: %0.3f" % metrics.homogeneity_score(labels, document_clusters.labels_))
+        logging.info("Completeness: %0.3f" % metrics.completeness_score(labels, document_clusters.labels_))
+        logging.info("V-measure: %0.3f" % metrics.v_measure_score(labels, document_clusters.labels_))
+        logging.info("Adjusted Rand-Index: %.3f"
+                     % metrics.adjusted_rand_score(labels, document_clusters.labels_))
+        # NOTE: Silhouette score: closer to 1 the better, mean of silhouette Coefficient for all observations, large dataset == long time
+        logging.info("Silhouette Coefficient: %0.3f"
+                     % metrics.silhouette_score(vectorized, document_clusters.labels_, sample_size=1000))
+        logging.info("---------------")
 
-    logging.info("---------------")
-
-    if not opts.use_hashing:
+    if not args.use_hashing:
         logging.info("Top terms per cluster:")
 
-        if opts.n_components:
+        if args.n_components:
             original_space_centroids = svd.inverse_transform(document_clusters.cluster_centers_)
             order_centroids = original_space_centroids.argsort()[:, ::-1]
         else:
             order_centroids = km.cluster_centers_.argsort()[:, ::-1]
 
         terms = vectorizer.get_feature_names()
-        for i in range(true_k):
+        for i in range(args.true_k):
             print(" Cluster %d:" % i, end='')
             for ind in order_centroids[i, :10]:
                 print(' %s' % terms[ind], end='')
             print
-    return document_clusters, terms, true_k
+    return document_clusters, terms, train_vectorizer
 
 
-def compare_items_to_cluster(document_clusters, Y, true_k):
+def compare_items_to_cluster(document_clusters, client_data, args, vectorized):
     """Checks if any of the top clusters are suitable to enter
 
     Returns list of suitable urls to use as recommendations.
 
     Requires Kmeans object
     Params:
-    - opts:
-    - X: training instances to cluster (needs vectorizarion and LSA first [Outout from cluster_docs?])
-    - Y: new training samples (test data or data from user)
+    - args:
+    - document_clusters: clusters of documents from user's history
+    - client_data: new training samples (test data or data from user) [dict with url as key, text as value]
+    - true_k: number of clusters
+    - vectorized: used to transform the client data into a document term matrix
 
     Website: http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html#sklearn.cluster.KMeans
     """
-    # NOTE: kmeans++: Selects initial clusters in a way that speeds up convergence
-    #if opts.minibatch:
-    #    km = MiniBatchKMeans(n_clusters=true_k, init='k-means++', n_init=1,
-    #                          init_size=1000, batch_size=1000, verbose=opts.verbose)
-    #else:
-    #    km = KMeans(n_clusters=true_k, init='k-means++', max_iter=100, n_init=1,
-    #                verbose=opts.verbose)
-    # Compute clusters
-    # TODO: Use this as an input, get from cluster_docs()
-    #kmeans = km.fit(X)
+    # Vectorize the client data for predictions
+    logging.info("INFO: Extracting features from the client dataset using a sparse vectorizer")
+    # fit_transform: Transform a sequence of documents to a document-term matrix.
+    client_array = vectorized.transform(client_data.values())
+    logging.info("Client Array: ")
+    logging.info(client_array)
 
-    # TODO: Use km.predict(Y) Predict the closest cluster each sample in Y belongs to.
-    y_labels = document_clusters.predict(Y)
+    # Returns index of the cluster each sample belongs to.
+    # TODO: If this doesn't work, change to use km instead of document_clusters
+    client_labels = document_clusters.predict(client_array)
+    logging.info("Predictions")
+    logging.info(client_labels)
+    labels = document_clusters.labels_
+    unique_labels = dict()
+    for label in labels:
+        if unique_labels.has_key(label):
+            unique_labels[label] += 1
+        else:
+            unique_labels[label] = 1
+
+    # Find biggest cluster
+    # TODO: find 2nd biggest cluster
+    logging.info("INFO: Labels and the count")
+    biggest_cluster = labels[0]
+    cluster_size = unique_labels[biggest_cluster]
+    for label in unique_labels:
+        if cluster_size < unique_labels[label]:
+            biggest_cluster = label
+            cluster_size = unique_labels[label]
+        # print(str(label) +" - "+str(unique_labels[label]))
+    print("INFO: Largest Cluster: "+str(biggest_cluster))
 
     # TODO: Create links list to recommend
     recommended_links = []
-
-    # TODO: Find largest clusters in kmeans OR check how far away new data is from clusters
-    # i.e if data is past a threshold, it is not a good recommendation
-
-    # Cluster centres for each model
-    k_means_var = [km.fit(X) for k in true_k]
-    centroids = [kmeans.cluster_centers_ for X in k_means_var]
-    # Calculate euclidean distance from each point to each cluster centre
-    # pairwise(): compute pairwise distances between two points
-    k_euclid = [DistanceMetric.get_metric('euclidean').pairwise(X, cent) for cent in centroids]
-    dist = [numpy.min(ke, axis=1) for ke in k_euclid]
+    urls_from_client = client_data.keys()
+    counter = 0
+    for label in client_labels:
+        if label == biggest_cluster:
+            recommended_links.append(urls_from_client[counter])
+        counter += 1
 
     return recommended_links
-
 
 
 def main():
@@ -200,43 +216,59 @@ def main():
 		default=200,
 		help='Set limit for the amount of URLs to parse. Default=%(default)s'
 	)
-    arguments = parser.parse_args()
-
-    op = optparse.OptionParser()
-    op.add_option(
-            "--lsa",
-            dest="n_components", type="int",
-            help="Preprocess documents with latent semantic analysis."
+    parser.add_argument(
+        '--true-k',
+        default=10,
+        help='Number of clusers to create from the user\'s history'
     )
-    op.add_option("--no-minibatch",
-                  action="store_false", dest="minibatch", default=True,
-                  help="Use ordinary k-means algorithm (in batch mode).")
-    op.add_option("--no-idf",
-                  action="store_false", dest="use_idf", default=True,
-                  help="Disable Inverse Document Frequency feature weighting.")
-    op.add_option("--use-hashing",
-                  action="store_true", default=False,
-                  help="Use a hashing feature vectorizer")
-    op.add_option("--n-features", type=int, default=10000,
-                  help="Maximum number of features (dimensions)"
-                       " to extract from text.")
-    op.add_option("--verbose",
-                  action="store_true", dest="verbose", default=False,
-                  help="logging.info progress reports inside k-means algorithm.")
-    (opts, args) = op.parse_args()
-    if len(args) > 0:
-        logging.info('EXITING')
-        op.error('This script takes no arguments.')
-        sys.exit(1)
+    parser.add_argument(
+        "--lsa",
+        dest="n_components",
+        type=int,
+        help="Preprocess documents with latent semantic analysis."
+    )
+    parser.add_argument(
+        "--no-minibatch",
+        action="store_false",
+        dest="minibatch",
+        default=True,
+        help="Use ordinary k-means algorithm (in batch mode)."
+    )
+    parser.add_argument(
+        "--use-idf",
+        action="store_false",
+        default=True,
+        help="Disable Inverse Document Frequency feature weighting."
+    )
+    parser.add_argument(
+        "--use-hashing",
+        action="store_true",
+        default=False,
+        help="Use a hashing feature vectorizer"
+    )
+    parser.add_argument(
+        "--n-features",
+        type=int,
+        default=10000,
+        help="Maximum number of features (dimensions) to extract from text.")
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        default=False,
+        help="logging.info progress reports inside k-means algorithm."
+    )
+    args = parser.parse_args()
 
-    urls = parse_html.get_urls(arguments.current_dir)
-    text_docs = parse_html.parse_html(urls, arguments.url_limit)
+    urls = parse_html.get_urls(args.current_dir)
+    text_docs = parse_html.parse_html(urls, args.url_limit)
     logging.info('---------------------------')
     logging.info(text_docs.keys())
-    doc_clusters, doc_cluster_terms, true_k = cluster_docs(text_docs, opts)
+    doc_clusters, doc_cluster_terms = cluster_docs(text_docs, args, args.true_k)
     # TODO: new_data should be links from client
     new_data = []
-    compare_items_to_cluster(doc_clusters, new_data, true_k)
+    #compare_items_to_cluster(doc_clusters, new_data, args)
+    logging.info("----------------------------")
+    logging.info("COMPLETE")
 
 
 if __name__ == '__main__':
