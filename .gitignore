@@ -11,3 +11,5 @@ History
 history.txt
 *.csv
 *.json
+*.pem
+*.key
