@@ -80,9 +80,7 @@ def run(server_class=HTTPServer, handler_class=HandleHTTP, port=4443):
     try:
         # NOTE: 2nd httpd for reference
         #httpd = BaseHTTPServer.HTTPServer(('localhost', 4443), SimpleHTTPServer.SimpleHTTPRequestHandler)
-        # TODO: Create localhost.pem file
         #httpd.socket = ssl.wrap_socket (httpd.socket, certfile='path/to/localhost.pem', server_side=True)
-        # NOTE: Example uses port 4443 as port 443 needs privileges
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
@@ -94,7 +92,6 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         run(port=int(sys.argv[1]))
     else:
-        # TODO: Start collecting history from here
         cwd = os.getcwd()
 
     	parser = argparse.ArgumentParser()
