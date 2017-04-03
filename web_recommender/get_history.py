@@ -59,6 +59,17 @@ def copy_chrome_history(path_to_file, current_dir):
 		raise SystemExit(1)
 
 
+def open_chrome(chrome_path, url=None):
+	logging.info('Opening Chrome Browser')
+	if sys.platform.startswith('darwin'):
+		chrome_path = 'open -a /Applications/Google\ Chrome.app %s'
+	if sys.platform.startswith('win32'):
+		chrome_path = 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe %s'
+	if sys.platform.startswith('linux'):
+		chrome_path = '/usr/bin/google-chrome %s'
+	webbrowser.get(chrome_path).open(url)
+
+
 def clean_up():
 	"""Clean up current directory
 	"""
@@ -97,6 +108,7 @@ def main():
 	)
 	args = parser.parse_args()
 	copy_chrome_history(args.file_path, args.current_dir)
+	open_chrome(args.chrome_path)
 
 
 if __name__ == '__main__':
