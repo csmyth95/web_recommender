@@ -17,7 +17,8 @@ import ssl
 from time import time
 # import textract
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO,
+					format='%(levelname)s %(message)s')
 
 
 def get_urls(current_dir):
@@ -38,7 +39,7 @@ def get_urls(current_dir):
 				# Exclude URLs that don't use the http protocols
 				continue
 	if urls is None:
-		logging.warning('WARNING: urls list is empty')
+		logging.warning('urls list is empty')
 	return urls
 
 
@@ -55,7 +56,6 @@ def parse_html(urls, url_limit):
 	"""
 	urls_with_text = dict()
 	logging.info('Parsing HTML files into text.\n')
-	t0 = time()
 	counter = 0
 	for url in urls:
 		logging.info(url)
@@ -64,7 +64,7 @@ def parse_html(urls, url_limit):
 			# Check if url is requesting authentication
 			auth = response.info().getheader('WWW-Authenticate')
 			if auth and auth.lower().startswith('basic'):
-				logging.warning("WARNING: Requesting {} requires basic authentication".format(url))
+				logging.warning("Requesting {} requires basic authentication".format(url))
 				continue
 
 			html = response.read()
@@ -87,13 +87,11 @@ def parse_html(urls, url_limit):
 			if counter > url_limit:
 				break
 		except ssl.CertificateError as e:
-			logging.warning("WARNING: "+str(e))
+			logging.warning(str(e))
 			continue
 		except Exception as e:
-			logging.warning("WARNING: "+str(e))
+			logging.warning(str(e))
 			pass
-
-	logging.info("INFO: Parsing took %0.3fs" % (time() - t0))
 	return urls_with_text
 
 
