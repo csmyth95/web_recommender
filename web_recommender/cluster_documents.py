@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
 """
-Script to cluster HTML text
+Script to cluster HTML text documents
 
-TODO:
 1. Get HTML in dictionary (format: 'url' => '<text>')
-2. Cluster data
-3. Store cluster data
+2. Use vectorization and dimensionality reduction technique e.g LSA
+3. Cluster data
+4. Create function for predicting new data and return recommendations
 
 NOTE: find way to import functions from parse_html.py
 """
@@ -16,7 +16,6 @@ import logging
 import os
 import urllib
 import bs4
-import textmining
 import parse_html
 # import textract
 
@@ -32,98 +31,88 @@ from sklearn import metrics
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from sklearn.neighbors import DistanceMetric
 
-import optparse
 import sys
 from time import time
 import numpy
 
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s %(levelname)s %(message)s')
+                    format='%(levelname)s %(message)s')
 
 
 def cluster_docs(text_docs, args, labels=None):
     """Cluster HTML documents using a clustering ML algorithm from sci-kit learn"""
 
-    logging.info("INFO: Extracting features from the dataset using a sparse vectorizer")
+    logging.info("Extracting features from the dataset using a sparse vectorizer")
     t0 = time()
-    # if args.use_hashing:
-    #     if args.use_idf:
-    #         # Perform an IDF normalization on the output of HashingVectorizer
-    #         hasher = HashingVectorizer(
-    #             n_features=args.n_features, stop_words='english', non_negative=True,
-    #             norm=None, binary=False
-    #         )
-    #         vectorizer = make_pipeline(hasher, TfidfTransformer())
-    #     else:
-    #         vectorizer = HashingVectorizer(
-    #             n_features=args.n_features, stop_words='english',
-    #             non_negative=False, norm='l2', binary=False
-    #         )
-    # else:
-    vectorizer = TfidfVectorizer(
-        max_features=args.n_features, stop_words='english', use_idf=args.use_idf
-    )
+    # Choose vectorizer to use
+    if args.use_hashing:
+        # Perform an IDF normalization on the output of HashingVectorizer
+        hasher = HashingVectorizer(
+            n_features=args.n_features, stop_words='english', non_negative=True,
+            norm=None, binary=False
+        )
+        vectorizer = make_pipeline(hasher, TfidfTransformer())
+    else:
+        vectorizer = TfidfVectorizer(
+            max_features=args.n_features, stop_words='english', use_idf=args.use_idf
+        )
+    logging.info("Using vectorization function: %s" % vectorizer)
+
     train_vectorizer = vectorizer.fit(text_docs.values())
     vectorized = train_vectorizer.transform(text_docs.values())
 
-    logging.info("done in %fs" % (time() - t0))
+    vectorization_time = (time() - t0)/60.0
+    logging.info("done in %0.3f" % vectorization_time)
     logging.info("n_samples: %d, n_features: %d" % vectorized.shape)
     logging.info("------------------")
 
-    if args.n_components:
-        # TODO: Create function for this so can swap between LDA and LSA
+    lsa = None
+    if args.lsa:
         logging.info("Performing dimensionality reduction using LSA")
         t0 = time()
         # Vectorizer results are normalized, which makes KMeans behave as
         # spherical k-means for better results. Since LSA/SVD results are
         # not normalized, we have to redo the normalization.
-        svd = TruncatedSVD(args.n_components)
+        # 100 features is recommended for LSA
+        svd = TruncatedSVD(n_components=100)
         normalizer = Normalizer(copy=False)
         lsa = make_pipeline(svd, normalizer)
 
         vectorized = lsa.fit_transform(vectorized)
-
-        logging.info("done in %fs" % (time() - t0))
+        lsa_time = (time() - t0)/60.0
+        logging.info("done in %0.3f" % lsa_time)
 
         explained_variance = svd.explained_variance_ratio_.sum()
         logging.info("Explained variance of the SVD step: {}%".format(
                 int(explained_variance * 100)))
-
+        logging.info("After dimensionality reduction:")
+        logging.info("n_samples: %d, n_features: %d" % vectorized.shape)
         logging.info("---------------------")
 
     # NOTE: kmeans++: Selects initial clusters in a way that speeds up convergence
+    # Choose between computational efficiency or cluster quality
     if args.minibatch:
-        km = MiniBatchKMeans(n_clusters=args.true_k, init='k-means++', n_init=1,
-                             init_size=1000, batch_size=1000, verbose=args.verbose)
+        km = MiniBatchKMeans(
+            n_clusters=args.true_k, init='k-means++', n_init=1,
+            init_size=1000, batch_size=1000, verbose=args.verbose
+        )
     else:
-        km = KMeans(n_clusters=true_k, init='k-means++', max_iter=100, n_init=1,
-                    verbose=args.verbose)
+        km = KMeans(
+            n_clusters=args.true_k, init='k-means++', max_iter=100,
+            n_init=1, verbose=args.verbose
+        )
 
-    logging.info("Clustering sparse data with %s" % km)
+    logging.info("Clustering sparse matrix with: %s" % km)
     t0 = time()
-    # Compute KMeans Clustering
     document_clusters = km.fit(vectorized)
-
-    logging.info("done in %0.3fs" % (time() - t0))
+    clustering_time = (time() - t0)/60.0
+    logging.info("Clustering done in %0.3f" % clustering_time)
     logging.info("---------------")
-
-    # Explanation: have labels and want to see if the clustering algorithm happened to cluster the data according to your labels
-    # NOTE: These can't be used as my documents aren't already labelled
-    if labels is not None:
-        logging.info("Homogeneity: %0.3f" % metrics.homogeneity_score(labels, document_clusters.labels_))
-        logging.info("Completeness: %0.3f" % metrics.completeness_score(labels, document_clusters.labels_))
-        logging.info("V-measure: %0.3f" % metrics.v_measure_score(labels, document_clusters.labels_))
-        logging.info("Adjusted Rand-Index: %.3f"
-                     % metrics.adjusted_rand_score(labels, document_clusters.labels_))
-        # NOTE: Silhouette score: closer to 1 the better, mean of silhouette Coefficient for all observations, large dataset == long time
-        logging.info("Silhouette Coefficient: %0.3f"
-                     % metrics.silhouette_score(vectorized, document_clusters.labels_, sample_size=1000))
-        logging.info("---------------")
 
     if not args.use_hashing:
         logging.info("Top terms per cluster:")
 
-        if args.n_components:
+        if args.lsa:
             original_space_centroids = svd.inverse_transform(document_clusters.cluster_centers_)
             order_centroids = original_space_centroids.argsort()[:, ::-1]
         else:
@@ -135,10 +124,10 @@ def cluster_docs(text_docs, args, labels=None):
             for ind in order_centroids[i, :10]:
                 print(' %s' % terms[ind], end='')
             print
-    return document_clusters, terms, train_vectorizer
+    return document_clusters, terms, train_vectorizer, lsa
 
 
-def compare_items_to_cluster(document_clusters, client_data, args, vectorized):
+def compare_items_to_cluster(document_clusters, client_data, args, train_vectorizer, lsa):
     """Checks if any of the top clusters are suitable to enter
 
     Returns list of suitable urls to use as recommendations.
@@ -154,14 +143,12 @@ def compare_items_to_cluster(document_clusters, client_data, args, vectorized):
     Website: http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html#sklearn.cluster.KMeans
     """
     # Vectorize the client data for predictions
-    logging.info("INFO: Extracting features from the client dataset using a sparse vectorizer")
+    logging.info("Extracting features from the client dataset using a sparse vectorizer")
     # fit_transform: Transform a sequence of documents to a document-term matrix.
-    client_array = vectorized.transform(client_data.values())
-    logging.info("Client Array: ")
-    logging.info(client_array)
+    vectorized_client = train_vectorizer.transform(client_data.values())
+    client_array = lsa.transform(vectorized_client)
 
     # Returns index of the cluster each sample belongs to.
-    # TODO: If this doesn't work, change to use km instead of document_clusters
     client_labels = document_clusters.predict(client_array)
     logging.info("Predictions")
     logging.info(client_labels)
@@ -173,24 +160,24 @@ def compare_items_to_cluster(document_clusters, client_data, args, vectorized):
         else:
             unique_labels[label] = 1
 
-    # Find biggest cluster
-    # TODO: find 2nd biggest cluster
-    logging.info("INFO: Labels and the count")
+    # Find biggest and 2nd biggest clusters
+    logging.info("Labels and the count")
     biggest_cluster = labels[0]
+    second_largest = biggest_cluster
     cluster_size = unique_labels[biggest_cluster]
     for label in unique_labels:
         if cluster_size < unique_labels[label]:
+            second_largest = biggest_cluster
             biggest_cluster = label
             cluster_size = unique_labels[label]
-        # print(str(label) +" - "+str(unique_labels[label]))
-    print("INFO: Largest Cluster: "+str(biggest_cluster))
+    logging.info("Largest Cluster: "+str(biggest_cluster)+" 2nd Largest: "+str(second_largest))
 
-    # TODO: Create links list to recommend
+    # Create links list to recommend
     recommended_links = []
     urls_from_client = client_data.keys()
     counter = 0
     for label in client_labels:
-        if label == biggest_cluster:
+        if label == biggest_cluster or label == second_largest:
             recommended_links.append(urls_from_client[counter])
         counter += 1
 
@@ -202,14 +189,14 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-            '--chrome-path',
-            default='open -a /Applications/Google\ Chrome.app %s',
-            help='set chrome path for the specific OS. Default=%(default)s'
+        '--chrome-path',
+        default='open -a /Applications/Google\ Chrome.app %s',
+        help='set chrome path for the specific OS. Default=%(default)s'
     )
     parser.add_argument(
-            '--current-dir',
-            default=cwd,
-            help='The current working directory where this script is being run.'
+        '--current-dir',
+        default=cwd,
+        help='The current working directory where this script is being run.'
     )
     parser.add_argument(
 		'--url-limit',
@@ -223,8 +210,8 @@ def main():
     )
     parser.add_argument(
         "--lsa",
-        dest="n_components",
-        type=int,
+        action="store_true",
+        default="True",
         help="Preprocess documents with latent semantic analysis."
     )
     parser.add_argument(
@@ -264,9 +251,6 @@ def main():
     logging.info('---------------------------')
     logging.info(text_docs.keys())
     doc_clusters, doc_cluster_terms = cluster_docs(text_docs, args, args.true_k)
-    # TODO: new_data should be links from client
-    new_data = []
-    #compare_items_to_cluster(doc_clusters, new_data, args)
     logging.info("----------------------------")
     logging.info("COMPLETE")
 
