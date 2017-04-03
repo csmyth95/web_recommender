@@ -189,11 +189,6 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--chrome-path',
-        default='open -a /Applications/Google\ Chrome.app %s',
-        help='set chrome path for the specific OS. Default=%(default)s'
-    )
-    parser.add_argument(
         '--current-dir',
         default=cwd,
         help='The current working directory where this script is being run.'
@@ -220,12 +215,6 @@ def main():
         dest="minibatch",
         default=True,
         help="Use ordinary k-means algorithm (in batch mode)."
-    )
-    parser.add_argument(
-        "--use-idf",
-        action="store_false",
-        default=True,
-        help="Disable Inverse Document Frequency feature weighting."
     )
     parser.add_argument(
         "--use-hashing",
