@@ -54,7 +54,7 @@ def cluster_docs(text_docs, args, labels=None):
         vectorizer = make_pipeline(hasher, TfidfTransformer())
     else:
         vectorizer = TfidfVectorizer(
-            max_features=args.n_features, stop_words='english', use_idf=args.use_idf
+            max_features=args.n_features, stop_words='english'
         )
     logging.info("Using vectorization function: %s" % vectorizer)
 
@@ -89,6 +89,9 @@ def cluster_docs(text_docs, args, labels=None):
         logging.info("n_samples: %d, n_features: %d" % vectorized.shape)
         logging.info("---------------------")
 
+    if vectorized.shape[0] < args.true_k:
+        args.true_k = int(float(vectorized.shape[0])/2.0)
+        logging.info("args.true_k set to: %s" % args.true_k)
     # NOTE: kmeans++: Selects initial clusters in a way that speeds up convergence
     # Choose between computational efficiency or cluster quality
     if args.minibatch:
@@ -124,6 +127,7 @@ def cluster_docs(text_docs, args, labels=None):
             for ind in order_centroids[i, :10]:
                 print(' %s' % terms[ind], end='')
             print
+        print
     return document_clusters, terms, train_vectorizer, lsa
 
 
@@ -142,9 +146,10 @@ def compare_items_to_cluster(document_clusters, client_data, args, train_vectori
 
     Website: http://scikit-learn.org/stable/modules/generated/sklearn.cluster.KMeans.html#sklearn.cluster.KMeans
     """
+    recommended_links = []
     # Vectorize the client data for predictions
     logging.info("Extracting features from the client dataset using a sparse vectorizer")
-    # fit_transform: Transform a sequence of documents to a document-term matrix.
+    # NOTE: fit_transform: Transform a sequence of documents to a document-term matrix.
     vectorized_client = train_vectorizer.transform(client_data.values())
     client_array = lsa.transform(vectorized_client)
 
@@ -160,27 +165,50 @@ def compare_items_to_cluster(document_clusters, client_data, args, train_vectori
         else:
             unique_labels[label] = 1
 
-    # Find biggest and 2nd biggest clusters
+    # Find biggest cluster label and centre
     logging.info("Labels and the count")
-    biggest_cluster = labels[0]
-    second_largest = biggest_cluster
-    cluster_size = unique_labels[biggest_cluster]
+    biggest_cluster_label = labels[0]
+    cluster_size = unique_labels[biggest_cluster_label]
     for label in unique_labels:
         if cluster_size < unique_labels[label]:
-            second_largest = biggest_cluster
-            biggest_cluster = label
+            biggest_cluster_label = label
             cluster_size = unique_labels[label]
-    logging.info("Largest Cluster: "+str(biggest_cluster)+" 2nd Largest: "+str(second_largest))
+    logging.info("Largest Cluster: "+str(biggest_cluster_label))
+    cluster_centres =  document_clusters.cluster_centers_
+    biggest_cluster_centre = cluster_centres[biggest_cluster_label]
+    logging.info("Coordinates of largest cluster's centre: ")
+    logging.info(biggest_cluster_centre)
 
-    # Create links list to recommend
-    recommended_links = []
+    # Create dict of urls in biggest cluster with their index
+    # NOTE: dict format: index => URL
+    biggest_cluster_links = dict()
     urls_from_client = client_data.keys()
     counter = 0
     for label in client_labels:
-        if label == biggest_cluster or label == second_largest:
-            recommended_links.append(urls_from_client[counter])
+        if label == biggest_cluster_label:
+            biggest_cluster_links[counter] = urls_from_client[counter]
         counter += 1
+    logging.info("biggest_cluster_links dict: ")
+    logging.info(biggest_cluster_links)
 
+    # Check if there are no links to recommend
+    if not biggest_cluster_links:
+        return recommended_links
+
+    # Compute distances for all predictions
+    recommended_links_indexes = biggest_cluster_links.keys()
+    recommended_links_coordinates = []
+    for index in recommended_links_indexes:
+        recommended_links_coordinates.append(client_array[index])
+
+    if len(recommended_links_coordinates) < 11:
+        recommended_links = biggest_cluster_links.values()
+    else:
+        logging.info("Finding top 10 nearest links to the largest cluster's centroid")
+        client_distances = document_clusters.transform(recommended_links_coordinates)[:, biggest_cluster_label]
+        closest_datapoint_indexes = np.argsort(client_distances)[::-1][:10]
+        for index in closest_datapoint_indexes:
+            recommended_links.append(biggest_cluster_links[index])
     return recommended_links
 
 
@@ -196,11 +224,12 @@ def main():
     parser.add_argument(
 		'--url-limit',
 		default=200,
+        type=int,
 		help='Set limit for the amount of URLs to parse. Default=%(default)s'
 	)
     parser.add_argument(
         '--true-k',
-        default=10,
+        default=5,
         help='Number of clusers to create from the user\'s history'
     )
     parser.add_argument(
@@ -235,8 +264,8 @@ def main():
     )
     args = parser.parse_args()
 
-    urls = parse_html.get_urls(args.current_dir)
-    text_docs = parse_html.parse_html(urls, args.url_limit)
+    urls = parse_html.get_urls(args.current_dir, args.url_limit)
+    text_docs = parse_html.parse_html(urls)
     logging.info('---------------------------')
     logging.info(text_docs.keys())
     doc_clusters, doc_cluster_terms, train_vectorizer, lsa = cluster_docs(text_docs, args, args.true_k)
