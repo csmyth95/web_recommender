@@ -250,7 +250,7 @@ def main():
     text_docs = parse_html.parse_html(urls, args.url_limit)
     logging.info('---------------------------')
     logging.info(text_docs.keys())
-    doc_clusters, doc_cluster_terms = cluster_docs(text_docs, args, args.true_k)
+    doc_clusters, doc_cluster_terms, train_vectorizer, lsa = cluster_docs(text_docs, args, args.true_k)
     logging.info("----------------------------")
     logging.info("COMPLETE")
 
