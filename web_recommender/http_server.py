@@ -4,22 +4,32 @@ from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 import simplejson
 import random
 import sys
-from time import time
+import time
 import os
 import argparse
 import logging
+import ssl
 
 # local imports
 import parse_html
 import get_history
 import cluster_documents
+import generate_cert
 
 # Global variables
+RECOMMENDED_LINKS = 'recommended_links.json'
+PATH_TO_CERT = 'localhost.pem'
+PATH_TO_KEY = 'localhost.key'
 FILE_PATH = '~/Library/Application Support/Google/Chrome/Default'
 doc_clusters = None
 doc_cluster_terms = None
 # NOTE: Need to use same vectorizer for both fitting and predicting data with Kmeans
 vectorizer = None
+lsa = None
+
+# Configure logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(levelname)s %(message)s')
 
 
 class HandleHTTP(BaseHTTPRequestHandler):
@@ -32,8 +42,11 @@ class HandleHTTP(BaseHTTPRequestHandler):
         """Handle GET request to return the recommended links from recommended_links.json"""
         self._set_headers()
         logging.info("INFO: GET received, sending recommended_links.json")
-        f = open("recommended_links.json", "r")
+        f = open(RECOMMENDED_LINKS, "r")
         self.wfile.write(f.read())
+        # Delete links after they are sent to the front end.
+        os.remove(RECOMMENDED_LINKS)
+        logging.info("JSON file with recommended links removed")
 
     def do_HEAD(self):
         self._set_headers()
@@ -46,9 +59,9 @@ class HandleHTTP(BaseHTTPRequestHandler):
         # NOTE: data is of type list
         data = simplejson.loads(self.data_string)
         data_documents = parse_html.parse_html(data, args.url_limit)
-        recommended_links = cluster_documents.compare_items_to_cluster(doc_clusters, data_documents, args, vectorizer)
+        recommended_links = cluster_documents.compare_items_to_cluster(doc_clusters, data_documents, args, vectorizer, lsa)
         json_response = simplejson.dumps(recommended_links)
-        with open("recommended_links.json", "w") as outfile:
+        with open(RECOMMENDED_LINKS, "w") as outfile:
             simplejson.dump(json_response, outfile)
         logging.info("INFO: Links to recommend: %s" % json_response)
         self.send_response(200)
@@ -56,17 +69,25 @@ class HandleHTTP(BaseHTTPRequestHandler):
         return
 
 
-def run(server_class=HTTPServer, handler_class=HandleHTTP, port=9000):
-    server_address = ('localhost', port)
+def run(server_class=HTTPServer, handler_class=HandleHTTP, port=4443):
+    server_address = ('127.0.0.1', port)
     httpd = server_class(server_address, handler_class)
+    # TODO: Get https working with cert, no response atm when ssl wrapper is set
+    # NOTE:Try and switch to SimpleHTTPRequestHandler
+    #httpd.socket = ssl.wrap_socket (httpd.socket, certfile=PATH_TO_CERT, keyfile=PATH_TO_KEY, server_side=True)
     print()
     print 'Starting httpd...'
     try:
+        # NOTE: 2nd httpd for reference
+        #httpd = BaseHTTPServer.HTTPServer(('localhost', 4443), SimpleHTTPServer.SimpleHTTPRequestHandler)
+        # TODO: Create localhost.pem file
+        #httpd.socket = ssl.wrap_socket (httpd.socket, certfile='path/to/localhost.pem', server_side=True)
+        # NOTE: Example uses port 4443 as port 443 needs privileges
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     httpd.server_close()
-    print time.asctime(), "Server Stops - %s:%s" % (HOST_NAME, PORT_NUMBER)
+    print time.asctime(time.localtime()), "Server Stops - %s:%s" % (HOST_NAME, PORT_NUMBER)
 
 
 if __name__ == "__main__":
@@ -110,15 +131,15 @@ if __name__ == "__main__":
         )
         parser.add_argument(
             "--lsa",
-            dest="n_components",
-            type=int,
+            action="store_true",
+            default="True",
             help="Preprocess documents with latent semantic analysis."
         )
         parser.add_argument(
             "--no-minibatch",
             action="store_false",
             dest="minibatch",
-            default=True,
+            default=False,
             help="Use ordinary k-means algorithm (in batch mode)."
         )
         parser.add_argument(
@@ -146,10 +167,16 @@ if __name__ == "__main__":
         )
     	args = parser.parse_args()
         # TODO: <AFTER_THOUGHT> add some parameter to switch between different functionality of the script
+        generate_cert.create_cert()
         get_history.copy_chrome_history(args.file_path, args.current_dir)
+        t_now = time.time()
         urls = parse_html.get_urls(args.current_dir)
         text_docs = parse_html.parse_html(urls, args.url_limit)
-        doc_clusters, doc_cluster_terms, vectorizer = cluster_documents.cluster_docs(text_docs, args)
-        logging.info("INFO: History collected, parsed and ready for recommendations.")
+        t_after_parse = (time.time() - t_now)/60.0
+        logging.info("Parsing took: %0.3f" % t_after_parse)
+        doc_clusters, doc_cluster_terms, vectorizer, lsa = cluster_documents.cluster_docs(text_docs, args)
+        t_after_clustering = (time.time() - t_after_parse)/60.0
+        logging.info("Clustering took: %0.3f" % t_after_clustering)
+        logging.info("History collected, parsed and ready for recommendations.")
         get_history.open_chrome(args.chrome_path, args.chrome_url)
         run()
