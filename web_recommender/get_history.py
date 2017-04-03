@@ -97,10 +97,6 @@ def main():
 	)
 	args = parser.parse_args()
 	copy_chrome_history(args.file_path, args.current_dir)
-	urls = parse_html.get_urls(args.current_dir)
-	text_docs = parse_html.parse_html(urls, args.url_limit)
-	send_to_db(text_docs)
-	urls_with_text = retrieve_from_db()
 
 
 if __name__ == '__main__':
