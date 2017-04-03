@@ -21,13 +21,17 @@ logging.basicConfig(level=logging.INFO,
 					format='%(levelname)s %(message)s')
 
 
-def get_urls(current_dir):
+def get_urls(current_dir, url_limit):
 	"""Read file of urls into a list"""
 	filename = os.path.join(current_dir, "history.txt")
 	urls = []
 	counter = 0
+	logging.info("URL Limit: %s" % url_limit)
 	with open(filename, 'r') as f:
 		for line in f:
+			if counter > url_limit:
+				logging.info("URL limit reached")
+				break
 			line = line.strip()
 			if line.endswith('pdf'):
 				# TODO: Implement way to parse PDFs correctly
@@ -43,20 +47,13 @@ def get_urls(current_dir):
 	return urls
 
 
-def parse_html(urls, url_limit):
-	"""
-	urls: list of urls from user's local history
+def parse_html(urls):
+	""" Parse text documents from websites
 
-	     TODO:
-		 - Check if url is reachable e.g urls from HPE
-		 - Filter out URLs that look for authentication e.g blackboard
-		 - - What about sites like Facebook?
-		 - Implement way to parse PDF files
-	     - Create try except for timeouts
+	urls: list of urls from user's local history
 	"""
 	urls_with_text = dict()
 	logging.info('Parsing HTML files into text.\n')
-	counter = 0
 	for url in urls:
 		logging.info(url)
 		try:
@@ -83,9 +80,6 @@ def parse_html(urls, url_limit):
 			# drop blank lines
 			text = '\n'.join(chunk for chunk in chunks if chunk)
 			urls_with_text[url] = text
-			counter += 1
-			if counter > url_limit:
-				break
 		except ssl.CertificateError as e:
 			logging.warning(str(e))
 			continue
@@ -100,33 +94,23 @@ def main():
 
 	parser = argparse.ArgumentParser()
 	parser.add_argument(
-		'--chrome-path',
-		default='open -a /Applications/Google\ Chrome.app %s',
-		help='set chrome path for the specific OS. Default=%(default)s'
-	)
-	parser.add_argument(
-		'--keyspace',
-		default='recommendersystem',
-		help='Apache Cassandra keyspace to use. Default=%(default)s'
-	)
-	parser.add_argument(
 		'--current-dir',
 		default=cwd,
 		help='The current working directory where this script is being run.'
 	)
 	parser.add_argument(
 		'--url-limit',
-		default=200,
+		default=10,
+		type=int,
 		help='Set limit for the amount of URLs to parse. Default=%(default)s'
 	)
 	args = parser.parse_args()
 
-	urls = get_urls(args.current_dir)
-	text_docs = parse_html(urls, args.url_limit)
+	urls = get_urls(args.current_dir, args.url_limit)
+	text_docs = parse_html(urls)
 	logging.info('---------------------------')
 	#logging.info(text_docs)
 	logging.info(text_docs.keys())
-	create_document_term_matrix(text_docs)
 
 
 if __name__ == '__main__':
