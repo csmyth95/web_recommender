@@ -79,6 +79,9 @@ def parse_html(urls):
 			chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
 			# drop blank lines
 			text = '\n'.join(chunk for chunk in chunks if chunk)
+			# drop double and single inverted commas
+			text = text.replace('""','').replace("''", "")
+
 			urls_with_text[url] = text
 		except ssl.CertificateError as e:
 			logging.warning(str(e))
