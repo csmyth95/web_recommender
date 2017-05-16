@@ -1,26 +1,31 @@
 # web_recommender
-A recommendation system based on web browsing. Uses a Python HTTP server to serve requests from
+A recommendation system based on web browsing. Uses a simple Python HTTP server to serve requests from
 a JavaScript client running in a web browser.
 
-NOTES:
-- Only works on MAC OSX at the moment.
-- Only supports Google Chrome browser.
+NOTE:
+- Only supports MAC OSX
+- Google Chrome is the only supported browser.
 
 ## Setup
-### TODO: Test setup on a new machine
+Firstly, clone this repository using
+
+```
+git clone
+```
+
 To resolve all dependencies for the package, execute this command in your terminal:
 
 ```
 make
 ```
 
-When all dependencies have been resolved, start the HTTP server to begin collecting your chrome history data.
+When all dependencies have been resolved, start the HTTP server from the command line to begin collecting your chrome history data.
 ```
-./http_server.py
+./web_recommender/http_server.py
 ```
 
 
-When the server is finished and the clusters have been collected, it can now server requests from the client. 
+When the server is finished and the clusters have been collected, it can now server requests from the browser plugin. 
 
 ## Client side
 ###TODO
