@@ -65,7 +65,7 @@ def parse_html(urls):
 				continue
 
 			html = response.read()
-			soup = bs4.BeautifulSoup(html, 'lxml')
+			soup = bs4.BeautifulSoup(html, "html5lib")
 
 			# Rip out all script and style elements
 			for script in soup(["script", "style"]):

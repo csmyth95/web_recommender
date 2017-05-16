@@ -156,7 +156,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     print(args)
-    print("\n\n")
+    print("\n")
     # TODO: <AFTER_THOUGHT> add some parameter to switch between different functionality of the script
     generate_cert.create_cert()
     get_history.copy_chrome_history(args.file_path, args.current_dir)
