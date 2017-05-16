@@ -7,7 +7,11 @@ NOTE:
 - Google Chrome is the only supported browser.
 
 ## Setup
-Clone the repository
+Firstly, clone this repository using
+
+```
+git clone
+```
 
 To resolve all dependencies for the package, execute this command in your terminal:
 
