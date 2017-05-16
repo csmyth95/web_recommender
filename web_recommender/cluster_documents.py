@@ -206,9 +206,16 @@ def compare_items_to_cluster(document_clusters, client_data, args, train_vectori
     else:
         logging.info("Finding top 10 nearest links to the largest cluster's centroid")
         client_distances = document_clusters.transform(recommended_links_coordinates)[:, biggest_cluster_label]
-        closest_datapoint_indexes = np.argsort(client_distances)[::-1][:10]
+        closest_datapoint_indexes = numpy.argsort(client_distances)[::-1][:10]
+        logging.info("closest_datapoint_indexes:")
+        logging.info(closest_datapoint_indexes)
         for index in closest_datapoint_indexes:
-            recommended_links.append(biggest_cluster_links[index])
+            try:
+                recommended_links.append(biggest_cluster_links[index])
+            except KeyError as e:
+                logging.warning(str(e))
+                continue
+
     return recommended_links
 
 
